@@ -1,4 +1,5 @@
 _tmp/
 __pycache__/
 
-
+code/.venv/
+static_collected/
