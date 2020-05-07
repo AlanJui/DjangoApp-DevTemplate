@@ -5,6 +5,8 @@ services:
   db:
     image: postgres
     restart: always
+    ports:
+      - 5432:5432
     environment:
       - POSTGRES_DB=postgres
       - POSTGRES_USER=postgres
@@ -18,12 +20,12 @@ services:
 
   web:
     build: .
-    # command: python manage.py runserver 0.0.0.0:8000
     # ports:
     #   - "8000:8000"
-    command: gunicorn web_app.wsgi:application --bind 0.0.0.0:8000
-    expose:
-      - 8000
+    # command: python manage.py runserver 0.0.0.0:8000
+    # command: gunicorn web_app.wsgi:application --bind 0.0.0.0:8000
+    # expose:
+    #   - 8000
     volumes:
       - ./code:/app
       - staticfiles_volume:/app/static_collected
