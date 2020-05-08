@@ -134,7 +134,7 @@ Django App 上線時之系統架構：
 
 ### （3）初始化資料庫
 
-    docker-compose exec web python manage.py migrate
+    $ docker-compose exec web python manage.py migrate
     Operations to perform:
       Apply all migrations: admin, auth, contenttypes, log_msg, sessions
     Running migrations:
@@ -159,7 +159,7 @@ Django App 上線時之系統架構：
 
 ### （4）建立後台管理員帳號
 
-      $ **docker-compose exec web python manage.py createsuperuser**
+      $ docker-compose exec web python manage.py createsuperuser
       Username (leave blank to use 'root'): admin
       Email address:
       Password:
@@ -168,7 +168,7 @@ Django App 上線時之系統架構：
 
 ### （5）搜集「靜態檔案」
 
-      $ **docker-compose exec web python manage.py collectstatic --clear --no-input**
+      $ docker-compose exec web python manage.py collectstatic --clear --no-input
 
       You have requested to collect static files at the destination
       location as specified in your settings:
@@ -186,6 +186,10 @@ Django App 上線時之系統架構：
       Deleting 'log_msg/log_msg.css'
 
       132 static files copied to '/app/static_collected'.
+
+### （6）瀏覽網頁驗證 Web App 已能正常運作
+
+    http://localhost:5000/
 
 # 各種疑難雜症排解
 
@@ -209,7 +213,7 @@ Django App 上線時之系統架構：
 
 ## 檢視 docker volume 容器中存放的檔案
 
-    docker run --rm -i -v=docker-compose-02_staticfiles_volume:/tmp/myvolume busybox find /tmp/myvolume
+    $ docker run --rm -i -v=docker-compose-02_staticfiles_volume:/tmp/myvolume busybox find /tmp/myvolume
     /tmp/myvolume
     /tmp/myvolume/admin
     /tmp/myvolume/admin/fonts
@@ -367,8 +371,8 @@ Django App 上線時之系統架構：
         ports:
           - 5432:5432
         environment:
-          - POSTGRES_DB=postgres
-          - POSTGRES_USER=postgres
+          - POSTGRES_DB=web_app_dev_db
+          - POSTGRES_USER=web_app_user
           - POSTGRES_PASSWORD=Passw0rd
         volumes:
           - postgres_data_volume:/var/lib/postgresql/data/
@@ -402,6 +406,19 @@ Django App 上線時之系統架構：
       static_files_volume:
       postgres_data_volume:
 
+### ./code/web_app/settings.py
+
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': 'web_app_dev_db',
+            'USER': 'web_app_user',
+            'PASSWORD': 'Passw0rd',
+            'HOST': 'db',
+            'PORT': 5432,
+        }
+    }
+
 ### ./Dockerfile
 
     FROM      python:3.8.2
@@ -409,9 +426,8 @@ Django App 上線時之系統架構：
 
     RUN       mkdir /app
     WORKDIR   /app
-    COPY      ./code/requirements.txt /app/
-    RUN       pip install -r requirements.txt
     COPY      ./code /app/
+    RUN       pip install -r requirements.txt
 
     # define the default command to run when starting the container
     CMD ["gunicorn", "--bind", "0.0.0.0:8000", "web_app.wsgi:application"]
@@ -459,7 +475,6 @@ Django App 上線時之系統架構：
             # docker will automatically resolve this to the correct address
             # because we use the same name as the service: "django_app"
             server web:8000;
-            # server 127.0.0.1:8000;
         }
 
         #include /etc/nginx/conf.d/*.conf;
