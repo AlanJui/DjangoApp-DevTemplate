@@ -4,6 +4,8 @@
 
 http://pawamoy.github.io/2018/02/01/docker-compose-django-postgres-nginx.html
 
+https://testdriven.io/blog/dockerizing-django-with-postgres-gunicorn-and-nginx/
+
 # 系統架構
 
 Django App 上線時之系統架構：
@@ -112,69 +114,29 @@ Django App 上線時之系統架構：
         └── wsgi.py
 ```
 
-## 啟動 DB 容器
+# docker-compose 開發環境基本操作
 
-啟動 Postgres 容器：
+## 建置開發環境
 
-    $ docker run --name db -p 5433:5433 -e POSTGRES_PASSWORD=Passw0rd -d postgres
+### （1）啟動開發環境
 
+    $ docker-compose up -d --build
 
-    $ docker ps
+### （2）確認每個 Docker 容器均已啟動
 
-    CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
-    0c6e4509748a        postgres            "docker-entrypoint.s…"   6 seconds ago       Up 5 seconds        5432/tcp            db
+    $ docker-compose ps
+              Name                          Command               State           Ports
+    ---------------------------------------------------------------------------------------------
+    docker-compose-02_adminer_1   entrypoint.sh docker-php-e ...   Up      0.0.0.0:8080->8080/tcp
+    docker-compose-02_db_1        docker-entrypoint.sh postgres    Up      0.0.0.0:5432->5432/tcp
+    docker-compose-02_proxy_1     nginx -g daemon off;             Up      0.0.0.0:5000->80/tcp
+    docker-compose-02_web_1       gunicorn --bind 0.0.0.0:80 ...   Up      0.0.0.0:8000->8000/tcp
 
-## 啟動 Django App 容器
+### （3）初始化資料庫
 
-### 產生 Python 套件安裝檔
-
-自 Django App 專案產生「套件安裝檔（requirements.txt）」。
-
-```
-    cd code
-    pipenv shell
-    pipenv lock --requirements > requirements.txt
-```
-
-## 製作 Dockerfile
-
-Dockerfile 容器設定：
-
-```
-    FROM      python:3.8.2
-    ENV       PYTHONUNBUFFERED 1
-    RUN       mkdir /app
-    WORKDIR   /app
-    COPY      ./code/requirements.txt /app/
-    RUN       pip install -r requirements.txt
-    COPY      ./code /app/
-
-    # define the default command to run when starting the container
-    CMD ["gunicorn", "--bind", "0.0.0.0:8000", "web_app.wsgi:application"]
-```
-
-## 建置 Docker 容器
-
-進入《專案根目錄》，透過指令建置 Django App 的 Docker 容器：
-
-    docker build -t my_app .
-
-驗證 Django App 的 Docker 容器已能正常運作：
-
-（1）啟動 web 容器：
-
-    $ docker run --name web -p 8000:8000 -d my_app
-    $ docker ps
-
-CONTAINER ID IMAGE COMMAND CREATED STATUS PORTS NAMES
-3e8e15b72d58 my_app "gunicorn --bind 0.0…" 4 seconds ago Up 3 seconds 0.0.0.0:8000->8000/tcp web
-0c6e4509748a postgres "docker-entrypoint.s…" 5 minutes ago Up 5 minutes 5432/tcp db
-
-（2）自 web 容器，執行 django 指令：
-
-    $ docker exec -it web python manage.py migrate
+    docker-compose exec web python manage.py migrate
     Operations to perform:
-      Apply all migrations: admin, auth, contenttypes, hello, sessions
+      Apply all migrations: admin, auth, contenttypes, log_msg, sessions
     Running migrations:
       Applying contenttypes.0001_initial... OK
       Applying auth.0001_initial... OK
@@ -192,139 +154,44 @@ CONTAINER ID IMAGE COMMAND CREATED STATUS PORTS NAMES
       Applying auth.0009_alter_user_last_name_max_length... OK
       Applying auth.0010_alter_group_name_max_length... OK
       Applying auth.0011_update_proxy_permissions... OK
-      Applying hello.0001_initial... OK
+      Applying log_msg.0001_initial... OK
       Applying sessions.0001_initial... OK
 
-    $ docker exec -it web python manage.py createsuperuser
-    Username (leave blank to use 'root'): admin
-    Email address:
-    Password:
-    Password (again):
-    Superuser created successfully.
+### （4）建立後台管理員帳號
 
-    $ docker exec -it web python manage.py collectstatic
+      $ **docker-compose exec web python manage.py createsuperuser**
+      Username (leave blank to use 'root'): admin
+      Email address:
+      Password:
+      Password (again):
+      Superuser created successfully.
 
-    You have requested to collect static files at the destination
-    location as specified in your settings:
+### （5）搜集「靜態檔案」
 
-        /opt/services/django_app/src/static_collected
+      $ **docker-compose exec web python manage.py collectstatic --clear --no-input**
 
-    This will overwrite existing files!
-    Are you sure you want to do this?
+      You have requested to collect static files at the destination
+      location as specified in your settings:
 
-    Type 'yes' to continue, or 'no' to cancel: yes
+          /app/static_collected
 
-    130 static files copied to '/opt/services/django_app/src/static_collected', 1 unmodified.
+      This will DELETE ALL FILES in this location!
+      Are you sure you want to do this?
 
-（3）瀏覽 http://localhost:8000
+      Type 'yes' to continue, or 'no' to cancel: yes
+      Deleting 'admin/fonts/LICENSE.txt'
+      ......
+      Deleting 'admin/img/gis/move_vertex_on.svg'
+      Deleting 'log_msg/test.png'
+      Deleting 'log_msg/log_msg.css'
 
-（4）回到 Terminal（2）視窗，終止 Docker 容器運作
+      132 static files copied to '/app/static_collected'.
 
-    $ docker stop my_app
-    my_app
+# 各種疑難雜症排解
 
-    $ docker ps -a
-    CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS                       PORTS               NAMES
-    e6d79945d14e        my_django_img       "gunicorn --chdir . …"   16 minutes ago      Exited (0) 32 seconds ago                        my_app
+## PostgreSQL 基本操作
 
-    $ docker images
-    REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
-    my_django_img       latest              bfeccafa4be7        20 minutes ago      985MB
-
-（5）重新啟動 Docker 容器（my_app）
-
-    $ docker start my_app
-    my_app
-
-    $ docker ps
-    CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS                    NAMES
-    e6d79945d14e        my_django_img       "gunicorn --chdir . …"   22 minutes ago      Up 6 seconds        0.0.0.0:8000->8000/tcp   my_app
-
-（6）瀏覽 http://localhost:8000
-
-（7）再次終止 Docker 容器
-
-    $ docker stop my_app
-
-# docker-compose
-
-    $ docker-compose build
-
-    $ docker-compose run --rm app /bin/bash
-    root@44f2a65aa0fe:/opt/services/django_app/src# psql -h localhost -U postgres
-    psql: error: could not connect to server: could not connect to server: Connection refused
-            Is the server running on host "localhost" (127.0.0.1) and accepting
-            TCP/IP connections on port 5432?
-    could not connect to server: Cannot assign requested address
-            Is the server running on host "localhost" (::1) and accepting
-            TCP/IP connections on port 5432?
-    root@8d35d83ebf04:/#
-
-
-
-
-
-    $ docker-compose build
-
-    $ docker-compose run --rm db1 /bin/bash
-    root@8d35d83ebf04:/# which psql
-    /usr/bin/psql
-    root@8d35d83ebf04:/#
-
-
-
-
-
-
-
-    $ docker-compose build
-
-    $ docker-compose up
-
-    $ docker-compose ps
-         Name                   Command               State     Ports
-    -------------------------------------------------------------------
-    test-101_app_1   gunicorn --chdir . --bind  ...   Up       8000/tcp
-    test-101_db1_1   docker-entrypoint.sh postgres    Up       5432/tcp
-    test-101_web_1   nginx -g daemon off;             Exit 1
-
-    $ docker-compose run app bash
-    Starting test-101_db1_1 ... done
-    root@adcabbb9cb0f:/opt/services/django_app/src# python manage.py migrate
-
-
-
-
-    alanjui@MBP-2018:~/workspace/vagrant/test-101 (master)
-    $ docker-compose run app python manage.py shell
-    Starting test-101_db1_1 ... done
-    Python 3.8.2 (default, Apr 23 2020, 14:22:33)
-    [GCC 8.3.0] on linux
-    Type "help", "copyright", "credits" or "license" for more information.
-    (InteractiveConsole)
-    >>>
-    now exiting InteractiveConsole...
-
-    alanjui@MBP-2018:~/workspace/vagrant/test-101 (master)
-    $
-
-
-
-
-    docker-compose run --rm app python manage.py db1 upgrade
-
-
-
-    alanjui@MBP-2018:~/workspace/vagrant/test-101 (master)
-    $ docker-compose run db1 psql -h localhost -U postgres
-    psql: could not connect to server: Connection refused
-    Is the server running on host "localhost" (127.0.0.1) and accepting
-    TCP/IP connections on port 5432?
-    could not connect to server: Cannot assign requested address
-    Is the server running on host "localhost" (::1) and accepting
-    TCP/IP connections on port 5432?
-
-## PostgreSQL Service
+### 自 postgres 影象檔產生 docker 容器
 
     $ docker run --name postgres-12 -e POSTGRES_PASSWORD=Passw0rd -d postgres
 
@@ -332,35 +199,15 @@ CONTAINER ID IMAGE COMMAND CREATED STATUS PORTS NAMES
     CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
     1349636c5389        postgres            "docker-entrypoint.s…"   4 seconds ago       Up 3 seconds        5432/tcp            postgres-12
 
+### 要求 docker 容器執行 bash 指令
 
+    $ docker exec -it postgres-12 /bin/bash
 
+    root@ed337d648dea:/# su - postgres
 
-    docker run --name postgres_bash --rm -i -t postgres bash
-    docker exec -d postgres_bash touch /tmp/execWorks
+    postgres@ed337d648dea:/# psql -h localhost -U postgres -W -d postgres
 
-
-    docker exec -it postgres_bash bash
-
-
-
-
-
-    root@ed337d648dea:/# service postgresql start
-    [warn] No PostgreSQL clusters exist; see "man pg_createcluster" ... (warning).
-
-
-
-    root@ed337d648dea:/# /etc/init.d/postgresql start
-    [warn] No PostgreSQL clusters exist; see "man pg_createcluster" ... (warning).
-
-
-
-
-    $ service postgresql status
-
-# 各種疑難雜症排解
-
-檢視 docker volume 容器中存放的檔案
+## 檢視 docker volume 容器中存放的檔案
 
     docker run --rm -i -v=docker-compose-02_staticfiles_volume:/tmp/myvolume busybox find /tmp/myvolume
     /tmp/myvolume
@@ -475,9 +322,9 @@ CONTAINER ID IMAGE COMMAND CREATED STATUS PORTS NAMES
         }
     ]
 
-# nginx
+# 各種設定檔參考資料
 
-## nginx 預設的 default.conf
+### nginx 預設的 default.conf
 
     server {
         listen       80;
@@ -506,4 +353,154 @@ CONTAINER ID IMAGE COMMAND CREATED STATUS PORTS NAMES
         #location ~ /\.ht {
         #    deny  all;
         #}
+    }
+
+### ./docker-compose.yml
+
+    version: '3'
+
+    services:
+
+      db:
+        image: postgres
+        restart: always
+        ports:
+          - 5432:5432
+        environment:
+          - POSTGRES_DB=postgres
+          - POSTGRES_USER=postgres
+          - POSTGRES_PASSWORD=Passw0rd
+        volumes:
+          - postgres_data_volume:/var/lib/postgresql/data/
+
+      adminer:
+        image: adminer
+        restart: always
+        ports:
+          - 8080:8080
+
+      web:
+        build: .
+        ports:
+          - 8000:8000
+        volumes:
+          - ./code:/app
+          - static_files_volume:/app/static_collected/
+        depends_on:
+          - db
+
+      proxy:
+        build: ./config/nginx
+        volumes:
+          - static_files_volume:/usr/share/nginx/html/static/
+        ports:
+          - 5000:80
+        depends_on:
+          - web
+
+    volumes:
+      static_files_volume:
+      postgres_data_volume:
+
+### ./Dockerfile
+
+    FROM      python:3.8.2
+    ENV       PYTHONUNBUFFERED 1
+
+    RUN       mkdir /app
+    WORKDIR   /app
+    COPY      ./code/requirements.txt /app/
+    RUN       pip install -r requirements.txt
+    COPY      ./code /app/
+
+    # define the default command to run when starting the container
+    CMD ["gunicorn", "--bind", "0.0.0.0:8000", "web_app.wsgi:application"]
+
+### ./config/nginx/Dockerfile
+
+    FROM      nginx
+    COPY      nginx.conf /etc/nginx/nginx.conf
+    COPY      static_collected /usr/share/nginx/html/static
+    RUN       rm -f /usr/share/nginx/html/*.html
+
+### ./config/nginx/nginx.conf
+
+    user  nginx;
+    worker_processes  1;
+
+    error_log  /var/log/nginx/error.log warn;
+    pid        /var/run/nginx.pid;
+
+
+    events {
+        worker_connections  1024;
+    }
+
+
+    http {
+        include       /etc/nginx/mime.types;
+        default_type  application/octet-stream;
+
+        log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                          '$status $body_bytes_sent "$http_referer" '
+                          '"$http_user_agent" "$http_x_forwarded_for"';
+
+        access_log  /var/log/nginx/access.log  main;
+
+        sendfile        on;
+        #tcp_nopush     on;
+
+        keepalive_timeout  65;
+
+        #gzip  on;
+
+
+        upstream web_server {
+            # docker will automatically resolve this to the correct address
+            # because we use the same name as the service: "django_app"
+            server web:8000;
+            # server 127.0.0.1:8000;
+        }
+
+        #include /etc/nginx/conf.d/*.conf;
+        server {
+            listen       80;
+            server_name  localhost;
+
+            #charset koi8-r;
+            charset utf-8;
+            client_max_body_size 75M;
+            access_log /var/log/nginx/host.access.log  main;
+
+            # location / {
+            #     root   /usr/share/nginx/html;
+            #     index  index.html index.htm;
+            # }
+
+            location / {
+                # everything is passed to Gunicorn
+                proxy_pass http://web_server;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header Host $host;
+                proxy_redirect off;
+            }
+
+            location /static {
+                alias /usr/share/nginx/html/static;
+            }
+
+            location /media {
+                alias /usr/share/nginx/html/media;
+            }
+
+
+            #error_page  404              /404.html;
+
+            # redirect server error pages to the static page /50x.html
+            #
+            error_page   500 502 503 504  /50x.html;
+            location = /50x.html {
+                root   /usr/share/nginx/html;
+            }
+        }
     }

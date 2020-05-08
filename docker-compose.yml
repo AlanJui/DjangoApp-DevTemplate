@@ -8,9 +8,11 @@ services:
     ports:
       - 5432:5432
     environment:
-      - POSTGRES_DB=postgres
-      - POSTGRES_USER=postgres
+      - POSTGRES_DB=web_app_dev_db
+      - POSTGRES_USER=web_app_user
       - POSTGRES_PASSWORD=Passw0rd
+    volumes:
+      - postgres_data_volume:/var/lib/postgresql/data/
 
   adminer:
     image: adminer
@@ -20,29 +22,23 @@ services:
 
   web:
     build: .
-    # ports:
-    #   - "8000:8000"
-    # command: python manage.py runserver 0.0.0.0:8000
-    # command: gunicorn web_app.wsgi:application --bind 0.0.0.0:8000
-    # expose:
-    #   - 8000
+    ports:
+      - 8000:8000
     volumes:
       - ./code:/app
-      - staticfiles_volume:/app/static_collected
+      - static_files_volume:/app/static_collected/
     depends_on:
       - db
 
   proxy:
-    # image: nginx
     build: ./config/nginx
     volumes:
-      - staticfiles_volume:/usr/share/nginx/html/static
+      - static_files_volume:/usr/share/nginx/html/static/
     ports:
       - 5000:80
     depends_on:
       - web
-    # command: rm -f /usr/share/nginx/html/*.html
 
 volumes:
-  staticfiles_volume:
-    
+  static_files_volume:
+  postgres_data_volume:  
