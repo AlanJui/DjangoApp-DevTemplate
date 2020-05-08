@@ -24,20 +24,24 @@ Django App 上線時之系統架構：
 
 ```
     《ProjectDir》
-    ├── Dockerfile
-    ├── Vagrantfile
-    ├── bootstrap.sh
     ├── code
+    │   ├── .venv
+    │   ├── log_msg
+    │   ├── static_collected
+    │   ├── web_app
+    │   ├── .python-version
+    │   ├── manage.py
     │   ├── Pipfile
     │   ├── Pipfile.lock
-    │   ├── hello
-    │   ├── manage.py
-    │   ├── requirements.txt
-    │   ├── static_collected
-    │   ├── uwsgi.ini
-    │   └── web_project
+    │   └── requirements.txt
     ├── config
-    └── install-python.sh
+    │   └── nginx
+    │       ├── Dockerfile
+    │       └── nginx.conf
+    ├── .gitignore
+    ├── docker-compose.yml
+    ├── Dockerfile
+    └── README.md
 
 ```
 
